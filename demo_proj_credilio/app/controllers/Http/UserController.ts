@@ -38,10 +38,11 @@ export default class UserController {
     }
   }
 
-  public async createProfile({request,response}){
+  public async createProfile({auth,request,response}){
+    const userObj = await auth.use('api').authenticate() 
+    console.log("userId ",userObj.$original.id)
     const {dob} = request.body()
-   
-    request.updateBody({...request.body(),dob:new Date(dob)})
+    request.updateBody({...request.body(),dob:new Date(dob),userId:userObj.$original.id})
    
      const newProfileSchema = schema.create({
          name: schema.string([
@@ -57,18 +58,19 @@ export default class UserController {
          console.log("**",payload);
          const profile = await Profile.create(payload)
         
-         response.send({msg:profile})
+         response.send({data:profile})
          }
          catch(e){
           response.badRequest(e.message)
          }
   }
 
-  public async viewProfile({request,response}){
-    const {id} = request.qs()   
+  public async viewProfile({auth,request,response}){ 
     try{
+    const userObj = await auth.use('api').authenticate() 
+    const userId = userObj.$original.id
     // const profile = await Profile.findBy('id',id)
-    const profile = await Profile.query().where({id}).select('name','userId','gender','dob')
+    const profile = await Profile.query().where({user_id:userId}).select('name','userId','gender','dob')
                     .preload('user',(userQuery) => {
                       userQuery.select('email')
                     })
@@ -79,18 +81,19 @@ export default class UserController {
       dob: profile[0].dob,
     } 
     let resObj = newObj as ProfileRes
-    console.log(resObj);
+    //console.log(resObj);
     
     response.send({data:resObj})
     }catch(e){
-      response.badRequest(e.messages)
+      response.badRequest(e.message)
     }
   }
-  public async updateProfile({request,response}){
+  public async updateProfile({auth,request,response}){
     try{
-    
+      const userObj = await auth.use('api').authenticate() 
+      const userId = userObj.$original.id
       const {dob} = request.body()
-      const {userId} = request.qs()
+      
     if(dob)
     request.updateBody({...request.body(),dob:new Date(dob)})
    
@@ -106,7 +109,7 @@ export default class UserController {
     console.log("payload ",payload);
 
     if(!payload || Object.keys(payload).length===0)
-    throw new Error('required at least one valid field')
+    throw new Error('require at least one valid field')
     else
     {
      const a =  await Profile.query().where('user_id',userId).update(payload)
@@ -121,9 +124,10 @@ export default class UserController {
     }
   }
 
-  public async deleteProfile({request,response}){
+  public async deleteProfile({auth,request,response}){
 try{
-  const {userId} = request.qs()
+  const userObj = await auth.use('api').authenticate() 
+  const userId = userObj.$original.id
   const a = await Profile.query().where('user_id',userId ).delete()
   if(a[0])
      response.send({msg:"profile deleted"})
@@ -132,5 +136,27 @@ try{
 }catch(e){
   response.badRequest(e.messages?e.messages:e.message)
 }
+  }
+
+  public async login({auth, request,response}){
+    const email = request.input('email')
+    const password = request.input('password')
+
+    try {
+      const token = await auth.use('api').attempt(email, password,{
+        expiresIn: '30 mins'
+      })
+      console.log(token);
+      return "ok"
+    } catch {
+      return response.unauthorized('Invalid credentials')
+    }
+  }
+
+  public async logout({ auth, request, response }) {
+    await auth.use('api').revoke()
+    return {
+      revoked: true
+    }
   }
 }
