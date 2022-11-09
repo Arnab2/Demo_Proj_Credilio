@@ -7,9 +7,9 @@ export default class extends BaseSchema {
     this.schema.createTable(this.tableName, (table) => {
       table.increments('id')
       table
-        .integer('userId')
+        .integer('user_id')
         .unsigned()//0 to +ve
-        // .references('users.id')
+        //.references('users.id')
         // .onDelete('CASCADE') // delete profile when user is delete
       table.string('name')
       table.string('mobile')
