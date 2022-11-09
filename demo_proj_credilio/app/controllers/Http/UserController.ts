@@ -129,7 +129,6 @@ try{
      response.send({msg:"profile deleted"})
      else
      response.send({msg:"userId not found"})
-  
 }catch(e){
   response.badRequest(e.messages?e.messages:e.message)
 }
