@@ -18,7 +18,7 @@ export default class UserController {
       if (!userExist) {
         const user = await User.create(payload);
 
-        return { msg: "registered", data: user };
+        return { msg: "registered successfully", data: user };
       } else
         response.badRequest({ msg: "User already registered with this email" });
     } catch (e) {
@@ -28,14 +28,26 @@ export default class UserController {
 
   public async createProfile({ auth, request, response }: HttpContextContract) {
     const userId = auth.user?.$original.id;
-    console.log(userId);
+
+    const profile = await Profile.query()
+      .where({ user_id: userId })
+      .select("name", "userId", "gender", "dob")
+      .first();
+    if (profile) return { msg: "Profile already exists in DB", data: profile };
 
     const { dob } = request.body();
-    request.updateBody({
-      ...request.body(),
-      dob: new Date(dob),
-      userId: userId,
-    });
+
+    if (dob)
+      request.updateBody({
+        ...request.body(),
+        dob: new Date(dob),
+        userId: userId,
+      });
+    else
+      request.updateBody({
+        ...request.body(),
+        userId: userId,
+      });
 
     const newProfileSchema = schema.create({
       name: schema.string([rules.minLength(3), rules.maxLength(30)]),
@@ -48,9 +60,9 @@ export default class UserController {
       const payload = await request.validate({ schema: newProfileSchema });
       const profile = await Profile.create(payload);
 
-      response.send({ data: profile });
+      return { msg: "Profile created successfully", data: profile };
     } catch (e) {
-      response.badRequest(e.message);
+      response.badRequest(e.messages);
     }
   }
 
@@ -117,9 +129,9 @@ export default class UserController {
         const a = await Profile.query()
           .where("user_id", userId)
           .update(payload);
-        console.log("a ", a);
-        if (a[0]) response.send({ msg: "profile updated" });
-        else response.send({ msg: "userId not found" });
+
+        if (a[0]) return { msg: "profile updated" };
+        else return { msg: "userId not found" };
       }
     } catch (e) {
       response.badRequest(e.messages ? e.messages : e.message);
@@ -129,9 +141,9 @@ export default class UserController {
   public async deleteProfile({ auth, request, response }: HttpContextContract) {
     try {
       const userId = auth.user?.$original.id;
-      const a = await Profile.query().where("user_id", userId).delete();
-      if (a[0]) response.send({ msg: "profile deleted" });
-      else response.send({ msg: "profile doesn't exist" });
+      const isDeleted = await Profile.query().where("user_id", userId).delete();
+      if (isDeleted[0]) return { msg: "profile deleted" };
+      else return { msg: "profile doesn't exist" };
     } catch (e) {
       response.badRequest(e.messages ? e.messages : e.message);
     }
