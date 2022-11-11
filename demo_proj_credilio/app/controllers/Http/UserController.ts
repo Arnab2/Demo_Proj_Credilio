@@ -3,17 +3,36 @@ import { HttpContextContract } from "@ioc:Adonis/Core/HttpContext";
 
 import User from "../../Models/User";
 import Profile from "App/Models/Profile";
+import { DateTime } from "luxon";
 
+type registerResponseType = {
+  message: string;
+  data?: {
+    email: string;
+    password: string;
+    id: number;
+  };
+};
+
+type profileResponseType = {
+  message: String;
+  data?: {
+    name: string;
+    email?: string;
+    userId?: number;
+    gender: string;
+    dob: DateTime;
+  };
+};
+
+type logInLogOutResponseType = {
+  message: String;
+  token?: string;
+};
 export default class UserController {
-  public async register({ request, response }: HttpContextContract) {
-    type resType = {
-      message: string;
-      data: {
-        email: string;
-        password: string;
-        id: number;
-      };
-    };
+  public async register({
+    request,
+  }: HttpContextContract): Promise<registerResponseType> {
     const newUserSchema = schema.create({
       email: schema.string([rules.email()]),
       password: schema.string([rules.minLength(8), rules.maxLength(16)]),
@@ -26,120 +45,92 @@ export default class UserController {
       if (!userExist) {
         const user = await User.create(payload);
 
-        return <resType>{ message: "registered successfully", data: user };
+        return { message: "registered successfully", data: user };
       } else
-        response.badRequest({
+        return {
           message: "User already registered with this email",
-        });
+        };
     } catch (e) {
-      response.badRequest(e.messages);
+      return { message: e.messages };
     }
   }
 
-  public async createProfile({ auth, request, response }: HttpContextContract) {
-    const userId = auth.user?.$original.id;
-
-    const profile = await Profile.query()
-      .where({ user_id: userId })
-      .select("name", "userId", "gender", "dob")
-      .first();
-    if (profile) return { message: "Profile already exists in DB" };
-
-    const { dob } = request.body();
-
-    if (dob)
-      request.updateBody({
-        ...request.body(),
-        dob: new Date(dob),
-        userId: userId,
-      });
-    else
-      request.updateBody({
-        ...request.body(),
-        userId: userId,
-      });
-
-    const newProfileSchema = schema.create({
-      name: schema.string([rules.minLength(3), rules.maxLength(30)]),
-      userId: schema.number(),
-      mobile: schema.string([rules.mobile()]),
-      gender: schema.string([rules.regex(new RegExp(/MALE|FEMALE/))]),
-      dob: schema.date(),
+  public async createProfile({
+    auth,
+    request,
+  }: HttpContextContract): Promise<profileResponseType> {
+    const userId = auth.user?.id;
+    request.updateBody({
+      ...request.body(),
+      userId: userId,
     });
     try {
+      const newProfileSchema = schema.create({
+        name: schema.string([rules.minLength(3), rules.maxLength(30)]),
+        userId: schema.number(),
+        mobile: schema.string([rules.mobile()]),
+        gender: schema.string([rules.regex(new RegExp(/MALE|FEMALE/))]),
+        dob: schema.date({ format: "yyyy-MM-dd" }),
+      });
       const payload = await request.validate({ schema: newProfileSchema });
+      const profileExists = await Profile.query()
+        .where({ user_id: userId })
+        .first();
+      if (profileExists)
+        return { message: "Profile already exists", data: profileExists };
+
       const profile = await Profile.create(payload);
 
-      return { msg: "Profile created successfully" };
+      return { message: "Profile created successfully", data: profile };
     } catch (e) {
-      response.badRequest(e.messages);
+      return { message: e.messages };
     }
   }
 
-  public async viewProfile({ auth, request, response }: HttpContextContract) {
+  public async viewProfile({
+    auth,
+  }: HttpContextContract): Promise<profileResponseType> {
     try {
-      type resType = {
-        message: String;
-        data: {
-          name: string;
-          email: string;
-          gender: string;
-          dob: string;
-        };
-      };
-
-      const userId = auth.user?.$original.id;
+      const userId = auth.user?.id;
       const profile = await Profile.query()
         .where({ user_id: userId })
         .select("name", "userId", "gender", "dob")
         .first();
 
-      if (!profile)
-        return { msg: "profile is not created yet.", data: profile };
+      if (!profile) return { message: "profile is not created yet." };
 
       await profile.load("user", (userQuery) => {
         userQuery.select("email");
       });
 
-      let resObj = <resType>{
+      let resObj = {
         message: "profile fetched successfully.",
         data: {
           name: profile.name,
           email: profile.user.email,
           gender: profile.gender,
-          dob: profile.dob.toString(),
+          dob: profile.dob,
         },
       };
 
       return resObj;
     } catch (e) {
-      response.badRequest(e.message);
+      return { message: e.messages };
     }
   }
-  public async updateProfile({ auth, request, response }: HttpContextContract) {
+  public async updateProfile({
+    auth,
+    request,
+  }: HttpContextContract): Promise<profileResponseType> {
+    const userId = auth.user?.id;
+
+    const newProfileSchema = schema.create({
+      name: schema.string.optional([rules.minLength(3), rules.maxLength(30)]),
+      mobile: schema.string.optional([rules.mobile()]),
+      gender: schema.string.optional([rules.regex(new RegExp(/male|female/i))]),
+      dob: schema.date.optional({ format: "yyyy-MM-dd" }),
+    });
     try {
-      type resType = {
-        message: String;
-        data: {
-          name: string;
-          mobile: string;
-          gender: string;
-          dob: string;
-        };
-      };
-      const userId = auth.user?.$original.id;
-      const { dob } = request.body();
-
-      if (dob) request.updateBody({ ...request.body(), dob: new Date(dob) });
-
-      const newProfileSchema = schema.create({
-        name: schema.string.optional([rules.minLength(3), rules.maxLength(30)]),
-        mobile: schema.string.optional([rules.mobile()]),
-        gender: schema.string.optional([
-          rules.regex(new RegExp(/male|female/i)),
-        ]),
-        dob: schema.date.optional(),
-      });
       const payload = await request.validate({ schema: newProfileSchema });
 
       if (!payload || Object.keys(payload).length === 0)
@@ -150,24 +141,26 @@ export default class UserController {
 
         const updatedProfile = await profile?.merge(payload).save();
 
-        let resObj = <resType>{
+        let resObj = {
           message: "profile updated",
           data: {
             name: updatedProfile?.name,
             mobile: updatedProfile?.mobile,
             gender: updatedProfile?.gender,
-            dob: updatedProfile?.dob.toString(),
+            dob: updatedProfile?.dob,
           },
         };
 
         return resObj;
       }
     } catch (e) {
-      response.badRequest(e.messages ? e.messages : e.message);
+      return { message: e.messages ? e.messages : e.message };
     }
   }
 
-  public async deleteProfile({ auth, request, response }: HttpContextContract) {
+  public async deleteProfile({
+    auth,
+  }: HttpContextContract): Promise<profileResponseType> {
     try {
       const userId = auth.user?.$original.id;
 
@@ -178,37 +171,47 @@ export default class UserController {
 
       const isUserDeleted = await User.query().where("id", userId).delete();
       if (isUserDeleted[0]) return { message: "user deleted" };
+      else return { message: "user not found" };
     } catch (e) {
-      response.badRequest(e.messages ? e.messages : e.message);
+      return { message: e.messages ? e.messages : e.message };
     }
   }
 
-  public async login({ auth, request, response }: HttpContextContract) {
-    const email = request.input("email");
-    const password = request.input("password");
+  public async login({
+    auth,
+    request,
+  }: HttpContextContract): Promise<logInLogOutResponseType> {
     const newUserSchema = schema.create({
       email: schema.string([rules.email()]),
       password: schema.string(),
     });
     try {
       const payload = await request.validate({ schema: newUserSchema });
-      console.log(payload);
 
-      const tokenObj = await auth.use("api").attempt(email, password, {
-        expiresIn: "60 mins",
-      });
+      const tokenObj = await auth
+        .use("api")
+        .attempt(payload.email, payload.password, {
+          expiresIn: "60 mins",
+        });
       return { message: "logged in successfully", token: tokenObj.token };
     } catch (e) {
-      if (e.messages) response.badRequest(e.messages);
-      else response.unauthorized("Invalid Credentials");
+      if (e.messages) return { message: e.messages };
+      else return { message: "Invalid Credentials" };
     }
   }
 
-  public async logout({ auth, request, response }: HttpContextContract) {
-    await auth.use("api").revoke();
-    return {
-      message: "Logged out successfully.",
-      revoked: true,
-    };
+  public async logout({
+    auth,
+  }: HttpContextContract): Promise<logInLogOutResponseType> {
+    try {
+      await auth.use("api").revoke();
+      return {
+        message: "Logged out successfully.",
+      };
+    } catch (e) {
+      return {
+        message: e.messages,
+      };
+    }
   }
 }
