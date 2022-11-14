@@ -163,16 +163,18 @@ export default class UserController {
     auth,
   }: HttpContextContract): Promise<ProfileResponseType> {
     try {
-      const userId = auth.user?.id || "";
+      const userId = auth.user?.id;
 
-      const isProfileDeleted = await Profile.query()
-        .where("user_id", userId)
+      const profile = await Profile.findBy("user_id", userId);
+      if (!profile) throw new Error("No profile exists");
+
+      await profile.delete();
+
+      const isUserDeleted = await User.query()
+        .where("id", userId as number)
         .delete();
-      if (!isProfileDeleted[0]) throw new Error("No profile exists");
-
-      const isUserDeleted = await User.query().where("id", userId).delete();
-      if (isUserDeleted[0]) return { message: "user deleted" };
-      else return { message: "user not found" };
+      if (isUserDeleted[0]) return { message: "User deleted" };
+      else return { message: "User not found" };
     } catch (e) {
       return { message: e.messages ? e.messages : e.message };
     }
