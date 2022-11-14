@@ -5,7 +5,7 @@ import User from "../../Models/User";
 import Profile from "App/Models/Profile";
 import { DateTime } from "luxon";
 
-type registerResponseType = {
+type RegisterResponseType = {
   message: string;
   data?: {
     email: string;
@@ -14,7 +14,7 @@ type registerResponseType = {
   };
 };
 
-type profileResponseType = {
+type ProfileResponseType = {
   message: String;
   data?: {
     name: string;
@@ -25,14 +25,15 @@ type profileResponseType = {
   };
 };
 
-type logInLogOutResponseType = {
+type LogInLogOutResponseType = {
   message: String;
   token?: string;
 };
+
 export default class UserController {
   public async register({
     request,
-  }: HttpContextContract): Promise<registerResponseType> {
+  }: HttpContextContract): Promise<RegisterResponseType> {
     const newUserSchema = schema.create({
       email: schema.string([rules.email()]),
       password: schema.string([rules.minLength(8), rules.maxLength(16)]),
@@ -58,7 +59,7 @@ export default class UserController {
   public async createProfile({
     auth,
     request,
-  }: HttpContextContract): Promise<profileResponseType> {
+  }: HttpContextContract): Promise<ProfileResponseType> {
     const userId = auth.user?.id;
     request.updateBody({
       ...request.body(),
@@ -89,7 +90,7 @@ export default class UserController {
 
   public async viewProfile({
     auth,
-  }: HttpContextContract): Promise<profileResponseType> {
+  }: HttpContextContract): Promise<ProfileResponseType> {
     try {
       const userId = auth.user?.id;
       const profile = await Profile.query()
@@ -121,7 +122,7 @@ export default class UserController {
   public async updateProfile({
     auth,
     request,
-  }: HttpContextContract): Promise<profileResponseType> {
+  }: HttpContextContract): Promise<ProfileResponseType> {
     const userId = auth.user?.id;
 
     const newProfileSchema = schema.create({
@@ -137,7 +138,7 @@ export default class UserController {
         throw new Error("require at least one valid field");
       else {
         const profile = await Profile.findBy("user_id", userId);
-        if (!profile) throw new Error("userId not found");
+        if (!profile) throw new Error("Profile not found");
 
         const updatedProfile = await profile?.merge(payload).save();
 
@@ -160,9 +161,9 @@ export default class UserController {
 
   public async deleteProfile({
     auth,
-  }: HttpContextContract): Promise<profileResponseType> {
+  }: HttpContextContract): Promise<ProfileResponseType> {
     try {
-      const userId = auth.user?.$original.id;
+      const userId = auth.user?.id || "";
 
       const isProfileDeleted = await Profile.query()
         .where("user_id", userId)
@@ -180,7 +181,7 @@ export default class UserController {
   public async login({
     auth,
     request,
-  }: HttpContextContract): Promise<logInLogOutResponseType> {
+  }: HttpContextContract): Promise<LogInLogOutResponseType> {
     const newUserSchema = schema.create({
       email: schema.string([rules.email()]),
       password: schema.string(),
@@ -202,7 +203,7 @@ export default class UserController {
 
   public async logout({
     auth,
-  }: HttpContextContract): Promise<logInLogOutResponseType> {
+  }: HttpContextContract): Promise<LogInLogOutResponseType> {
     try {
       await auth.use("api").revoke();
       return {

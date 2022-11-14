@@ -7,8 +7,8 @@ import {
   HasOne,
 } from "@ioc:Adonis/Lucid/Orm";
 import Hash from "@ioc:Adonis/Core/Hash";
-
 import Profile from "./Profile";
+
 export default class User extends BaseModel {
   @column({ isPrimary: true })
   public id: number;
