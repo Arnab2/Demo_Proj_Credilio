@@ -170,11 +170,12 @@ export default class UserController {
 
       await profile.delete();
 
-      const isUserDeleted = await User.query()
-        .where("id", userId as number)
-        .delete();
-      if (isUserDeleted[0]) return { message: "User deleted" };
-      else return { message: "User not found" };
+      const user = await User.findBy("id", userId);
+
+      if (!user) throw new Error("No user exists");
+
+      await user.delete();
+      return { message: "User deleted" };
     } catch (e) {
       return { message: e.messages ? e.messages : e.message };
     }
